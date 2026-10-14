@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plume - App Écrivain</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#FFFEF7;--ink:#1A1A1A;--accent:#6C4EFF}
+body{background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif}
+.editor-font{font-family:'Lora',serif}
+.sidebar{height:100vh;background:#fff;border-right:1px solid #eee;overflow-y:auto}
+.chap-item{cursor:pointer;padding:10px 14px;border-radius:10px;margin-bottom:6px}
+.chap-item.active{background:var(--ink);color:white}
+.chap-item:hover{background:#f2f2f2}
+.chap-item.active:hover{background:var(--ink)}
+#editor{font-size:20px;line-height:1.8;min-height:60vh;border:none;outline:none;resize:none;background:transparent;width:100%}
+#editor:focus{box-shadow:none}
+.stat-pill{background:#fff;border:1px solid #ddd;border-radius:50px;padding:4px 12px;font-size:13px}
+.focus-mode.sidebar,.focus-mode.topbar-hide{opacity:0;pointer-events:none}
+.focus-mode #main{margin-left:0!important;max-width:800px;margin:0 auto}
+.typewriter #editor{padding-top:40vh}
+</style>
+</head>
+<body>
+<div class="container-fluid p-0">
+<div class="row g-0">
+  <!-- SIDEBAR -->
+  <div class="col-12 col-md-3 col-lg-2 sidebar p-3" id="sidebar">
+    <h5 class="fw-bold mb-3"><i class="bi bi-feather"></i> Plume</h5>
+    <button class="btn btn-dark w-100 mb-3 rounded-4" onclick="newChapter()"><i class="bi bi-plus-lg"></i> Nouveau chapitre</button>
+    <small class="text-muted text-uppercase fw-bold">Chapitres</small>
+    <div id="chaptersList" class="mt-2"></div>
+    <hr>
+    <div class="d-grid gap-2">
+      <button class="btn btn-outline-dark btn-sm rounded-3" onclick="exportText()"><i class="bi bi-download"></i> Exporter.txt</button>
+      <button class="btn btn-outline-dark btn-sm rounded-3" onclick="toggleFocus()"><i class="bi bi-fullscreen"></i> Mode focus</button>
+      <button class="btn btn-outline-dark btn-sm rounded-3" onclick="toggleDark()"><i class="bi bi-moon"></i> Nuit</button>
+    </div>
+    <div class="mt-4 p-3 bg-light rounded-4">
+      <small class="fw-bold">Objectif du jour</small>
+      <div class="progress mt-2" style="height:8px"><div id="goalBar" class="progress-bar bg-dark" style="width:0%"></div></div>
+      <small><span id="goalText">0</span> / 500 mots</small>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="col-12 col-md-9 col-lg-10 p-4 p-lg-5" id="main">
+    <div class="d-flex justify-content-between align-items-center mb-4 topbar-hide">
+      <div class="d-flex gap-2">
+        <span class="stat-pill"><i class="bi bi-type"></i> <span id="wordCount">0</span> mots</span>
+        <span class="stat-pill"><i class="bi bi-clock"></i> <span id="readTime">0</span> min</span>
+        <span class="stat-pill text-success" id="saveStatus"><i class="bi bi-cloud-check"></i> Sauvegardé</span>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-light border rounded-3" onclick="format('bold')"><i class="bi bi-type-bold"></i></button>
+        <button class="btn btn-light border rounded-3" onclick="format('italic')"><i class="bi bi-type-italic"></i></button>
+        <button class="btn btn-light border rounded-3" onclick="format('h2')">H2</button>
+      </div>
+    </div>
+
+    <input id="title" class="form-control border-0 fs-1 fw-bold editor-font mb-3 p-0" placeholder="Titre du chapitre..." style="background:transparent">
+    <textarea id="editor" class="editor-font" placeholder="Commence à écrire ton histoire... Le Renouveau t'écoute."></textarea>
+
+    <div class="mt-5 p-4 rounded-4" style="background:#F6F5EF">
+      <small class="fw-bold"><i class="bi bi-lightbulb"></i> Notes rapides</small>
+      <textarea id="notes" class="form-control mt-2 border-0" rows="3" placeholder="Idées, personnages, recherches..." style="background:transparent"></textarea>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+let data = JSON.parse(localStorage.getItem('plume_data')||'[]');
+if(data.length==0){ data=[{id:Date.now(), title:'Chapitre 1 - Le petit caddie', content:'Dans l’allée infinie du supermarché Le Renouveau à Bertoua, un petit garçon...', notes:''}]; }
+let currentId = data[0].id;
+
+function renderChapters(){
+  const list = document.getElementById('chaptersList');
+  list.innerHTML='';
+  data.forEach(c=>{
+    const div=document.createElement('div');
+    div.className='chap-item '+(c.id===currentId?'active':'');
+    div.innerHTML=`<div class="fw-semibold text-truncate">${c.title||'Sans titre'}</div><small class="opacity-75">${(c.content||'').split(' ').length} mots</small>`;
+    div.onclick=()=>loadChapter(c.id);
+    list.appendChild(div);
+  });
+}
+function loadChapter(id){
+  saveCurrent();
+  currentId=id;
+  const c=data.find(x=>x.id===id);
+  document.getElementById('title').value=c.title;
+  document.getElementById('editor').value=c.content;
+  document.getElementById('notes').value=c.notes||'';
+  renderChapters(); updateStats();
+}
+function saveCurrent(){
+  const c=data.find(x=>x.id===currentId);
+  if(!c) return;
+  c.title=document.getElementById('title').value;
+  c.content=document.getElementById('editor').value;
+  c.notes=document.getElementById('notes').value;
+  localStorage.setItem('plume_data', JSON.stringify(data));
+  document.getElementById('saveStatus').innerHTML='<i class="bi bi-cloud-check"></i> Sauvegardé';
+}
+function newChapter(){
+  saveCurrent();
+  const nc={id:Date.now(), title:'Nouveau chapitre', content:'', notes:''};
+  data.unshift(nc); currentId=nc.id;
+  renderChapters(); loadChapter(nc.id);
+}
+function updateStats(){
+  const text=document.getElementById('editor').value;
+  const words=text.trim()?text.trim().split(/\s+/).length:0;
+  document.getElementById('wordCount').innerText=words;
+  document.getElementById('readTime').innerText=Math.ceil(words/200);
+  document.getElementById('goalText').innerText=words;
+  document.getElementById('goalBar').style.width=Math.min(100, words/5)+'%';
+}
+function format(type){
+  const e=document.getElementById('editor');
+  const s=e.selectionStart, en=e.selectionEnd;
+  let sel=e.value.substring(s,en);
+  if(type==='bold') e.value=e.value.substring(0,s)+'**'+sel+'**'+e.value.substring(en);
+  if(type==='italic') e.value=e.value.substring(0,s)+'*'+sel+'*'+e.value.substring(en);
+  if(type==='h2') e.value=e.value.substring(0,s)+'## '+sel+e.value.substring(en);
+  saveCurrent(); updateStats();
+}
+function exportText(){
+  const c=data.find(x=>x.id===currentId);
+  const blob=new Blob([c.title+'\n\n'+c.content],{type:'text/plain'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=c.title+'.txt'; a.click();
+}
+function toggleFocus(){ document.body.classList.toggle('focus-mode'); }
+function toggleDark(){
+  if(document.body.style.background==='rgb(26, 26, 26)'){
+    document.body.style.background=''; document.body.style.color='';
+  } else { document.body.style.background='#1A1A1A'; document.body.style.color='#FFFEF7'; }
+}
+document.getElementById('editor').addEventListener('input', ()=>{ document.getElementById('saveStatus').innerHTML='...'; updateStats(); saveCurrent(); });
+document.getElementById('title').addEventListener('input', saveCurrent);
+document.getElementById('notes').addEventListener('input', saveCurrent);
+
+// init
+renderChapters(); loadChapter(currentId);
+setInterval(saveCurrent, 2000);
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
